@@ -1,14 +1,7 @@
 import json
-import random
 import sqlite3
 from pathlib import Path
-# from app_log import AppLog
-from engine import Question, ROUNDS
-# AppLog.setup()
-QUESTION_PATH = Path(__file__).with_name("questions.json")
-QUESTION_PATH = "questions.json"
 LEADERBOARD_PATH = "leaderboard.json"
-# uiyuykytj
 
 
 class AnswerStore:
@@ -48,35 +41,6 @@ class AnswerStore:
                 """,
                 (match_code, player, answered_at, question, answer, score),
             )
-
-
-class QuestionBank:
-    def __init__(self, path: str | Path = QUESTION_PATH) -> None:
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            pass
-        self._questions: list[Question] = []
-        for item in data:
-            question: Question = Question(
-                text=item["question"],
-                options=item["options"],
-                correct=item["correct"],
-            )
-            self._questions.append(question)
-
-    def count(self) -> int:
-        return len(self._questions)
-
-    def pick(self, n: int = ROUNDS) -> list[Question]:
-        if not self._questions:
-            return []
-        if n <= 0:
-            return []
-        if n >= len(self._questions):
-            return list(self._questions)
-        return random.sample(self._questions, k=n)
 
 
 class ScoreBoard:

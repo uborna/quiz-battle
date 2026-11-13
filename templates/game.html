@@ -5,7 +5,7 @@
   <section class="rise game-card min-w-0 p-5 sm:p-8 lg:p-9" {% if game.phase == 'lobby' %}aria-labelledby="lobby-title"{% elif game.phase == 'feedback' or your_turn %}aria-labelledby="question-title"{% else %}aria-label="Waiting for your turn"{% endif %}>
     {% if game.phase == 'lobby' %}
       <div class="max-w-3xl py-2 sm:py-3">
-        <p class="eyebrow">Match lobby <span class="text-muted/60">/</span> Room {{ game.match_code }}</p>
+        <p class="eyebrow">Match lobby <span class="text-muted/60">/</span> {{ game.category }} <span class="text-muted/60">/</span> Room {{ game.match_code }}</p>
         <h1 id="lobby-title" class="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">Get ready to play.</h1>
         <p class="mt-3 max-w-lg text-sm leading-6 text-muted">The room is set. Get comfortable, then ready up when you’re good to go.</p>
         <div class="mt-7 grid gap-3 sm:grid-cols-2">

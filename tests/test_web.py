@@ -8,24 +8,48 @@ from markupsafe import escape
 from app import create_app
 
 
+def generate_test_questions(api_key, count, category):
+    return [
+        {
+            "question": f"Test question {index}",
+            "options": ["Correct", "Wrong 1", "Wrong 2", "Wrong 3"],
+            "correct": "A",
+        }
+        for index in range(count)
+    ]
+
+
 def make_client(tmp_path):
     app = create_app(
-        {"TESTING": True, "SECRET_KEY": "test-secret"},
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-secret",
+            "GEMINI_API_KEY": "test-key",
+        },
         leaderboard_path=tmp_path / "leaderboard.json",
         database_path=tmp_path / "answers.sqlite3",
+        question_generator=generate_test_questions,
     )
     return TestClient(app, follow_redirects=False)
 
 
 def make_lobby(tmp_path, host_name="Ada", guest_name="Lin"):
     app = create_app(
-        {"TESTING": True, "SECRET_KEY": "test-secret"},
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-secret",
+            "GEMINI_API_KEY": "test-key",
+        },
         leaderboard_path=tmp_path / "leaderboard.json",
         database_path=tmp_path / "answers.sqlite3",
+        question_generator=generate_test_questions,
     )
     host = TestClient(app, follow_redirects=False)
     guest = TestClient(app, follow_redirects=False)
-    host.post("/start", data={"player_name": host_name})
+    host.post(
+        "/start",
+        data={"player_name": host_name, "category": "General Knowledge"},
+    )
     match_code = next(iter(app.state.quiz_games))
     guest.get(f"/join/{match_code}")
     guest.post(f"/join/{match_code}", data={"player_name": guest_name})
@@ -44,13 +68,18 @@ def test_home_page_and_duplicate_names(tmp_path):
 
     home = client.get("/")
     assert home.status_code == 200
-    assert b"3 questions" in home.content
+    assert b"5 AI-generated questions" in home.content
+    assert home.content.index(b'name="category"') < home.content.index(
+        b'name="player_name"'
+    )
     assert b'name="player_name"' in home.content
     assert b'name="player2"' not in home.content
     invalid_start = client.post("/start", data={"player_name": " "})
     assert invalid_start.status_code == 302
     assert b"Add your name to create a room" in client.get("/").content
-    client.post("/start", data={"player_name": "Ada"})
+    client.post(
+        "/start", data={"player_name": "Ada", "category": "General Knowledge"}
+    )
     match_code = next(iter(client.app.state.quiz_games))
 
     guest = TestClient(client.app, follow_redirects=False)
@@ -59,6 +88,83 @@ def test_home_page_and_duplicate_names(tmp_path):
 
     assert duplicate.status_code == 400
     assert b"Choose a name different" in duplicate.content
+
+
+def test_gemini_generated_questions_are_used_for_new_matches(tmp_path):
+    generated = [
+        {"question": f"Generated question {index}", "options": ["A", "B", "C", "D"], "correct": "A"}
+        for index in range(5)
+    ]
+    calls = []
+
+    def generate(api_key, count, category):
+        calls.append((api_key, count, category))
+        return generated
+
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "GEMINI_API_KEY": "test-key"},
+        leaderboard_path=tmp_path / "leaderboard.json",
+        database_path=tmp_path / "answers.sqlite3",
+        question_generator=generate,
+    )
+    client = TestClient(app, follow_redirects=False)
+
+    home = client.get("/")
+    assert b"5 AI-generated questions" in home.content
+    response = client.post(
+        "/start", data={"player_name": "Ada", "category": "Science"}
+    )
+
+    assert response.status_code == 302
+    assert calls == [("test-key", 5, "Science")]
+    game = next(iter(app.state.quiz_games.values()))
+    assert game["category"] == "Science"
+    assert [question["text"] for question in game["questions"]] == [
+        question["question"] for question in generated
+    ]
+
+
+def test_gemini_generation_failure_does_not_create_match(tmp_path):
+    def fail_generation(api_key, count, category):
+        from question_generator import QuestionGenerationError
+
+        raise QuestionGenerationError("Gemini is unavailable.")
+
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "GEMINI_API_KEY": "test-key"},
+        leaderboard_path=tmp_path / "leaderboard.json",
+        database_path=tmp_path / "answers.sqlite3",
+        question_generator=fail_generation,
+    )
+    client = TestClient(app, follow_redirects=False)
+
+    response = client.post(
+        "/start", data={"player_name": "Ada", "category": "General Knowledge"}
+    )
+
+    assert response.status_code == 302
+    assert not app.state.quiz_games
+    assert b"Gemini is unavailable." in client.get("/").content
+
+
+def test_missing_api_key_does_not_use_local_questions(tmp_path):
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "GEMINI_API_KEY": None},
+        leaderboard_path=tmp_path / "leaderboard.json",
+        database_path=tmp_path / "answers.sqlite3",
+        question_generator=lambda api_key, count, category: pytest.fail(
+            "Generator should not be called without an API key"
+        ),
+    )
+    client = TestClient(app, follow_redirects=False)
+
+    response = client.post(
+        "/start", data={"player_name": "Ada", "category": "General Knowledge"}
+    )
+
+    assert response.status_code == 302
+    assert not app.state.quiz_games
+    assert b"Set the GEMINI_API_KEY" in client.get("/").content
 
 
 def test_game_starts_only_after_both_players_are_ready(tmp_path):
@@ -87,7 +193,7 @@ def test_match_can_be_played_to_results(tmp_path):
     host, guest = make_two_players(tmp_path)
     match_code = next(iter(host.app.state.quiz_games))
 
-    for round_number in range(3):
+    for round_number in range(5):
         host_page = host.get("/game").content
         guest_page = guest.get("/game").content
         game_data = host.app.state.quiz_games[match_code]
@@ -117,7 +223,7 @@ def test_match_can_be_played_to_results(tmp_path):
         assert host.get("/api/state").json()["ready_players"] == [0]
         guest.post("/continue")
         state = host.get("/api/state").json()
-        if round_number < 2:
+        if round_number < 4:
             assert state["phase"] == "playing"
         else:
             assert state["phase"] == "done"

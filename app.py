@@ -8,20 +8,44 @@ from pathlib import Path
 from threading import RLock
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
+from app_log import AppLog
 from engine import Match, POINTS, Question, ROUNDS, SPEED_BONUS, TIME_LIMIT
-from storage import AnswerStore, QuestionBank, ScoreBoard
+from question_generator import QuestionGenerationError, generate_questions
+from storage import AnswerStore, ScoreBoard
+
+load_dotenv(Path(__file__).with_name(".env"), override=False)
+AppLog.setup()
+logger = AppLog.get("app")
+
+QUESTION_CATEGORIES = (
+    "General Knowledge",
+    "Science",
+    "History",
+    "Geography",
+    "Technology",
+    "Sports",
+    "Arts & Literature",
+    "Movies & TV",
+    "Nature",
+)
 
 
 def create_app(
-    test_config=None, question_path=None, leaderboard_path=None, database_path=None
+    test_config=None,
+    leaderboard_path=None,
+    database_path=None,
+    question_generator=None,
 ):
     config = {
         "SECRET_KEY": os.environ.get("SECRET_KEY", "local-quiz-game-key-change-me"),
+        "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY"),
         "TESTING": False,
     }
     if test_config:
@@ -34,9 +58,7 @@ def create_app(
         same_site="lax",
     )
     templates = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
-    question_bank = QuestionBank(
-        question_path or Path(__file__).with_name("questions.json")
-    )
+    question_generator = question_generator or generate_questions
     scoreboard = ScoreBoard(
         leaderboard_path or Path(__file__).with_name("leaderboard.json")
     )
@@ -195,7 +217,9 @@ def create_app(
             request,
             "index.html",
             leaderboard=scoreboard.top(5),
-            round_count=min(ROUNDS, question_bank.count()),
+            round_count=ROUNDS,
+            api_key_configured=bool(config["GEMINI_API_KEY"]),
+            question_categories=QUESTION_CATEGORIES,
         )
 
     @app.post("/start", name="start_game")
@@ -206,14 +230,49 @@ def create_app(
             flash(request, "Add your name to create a room.", "error")
             return redirect_to(request, "index")
 
-        questions = question_bank.pick(ROUNDS)
+        category = str(form.get("category", "")).strip()
+        if category not in QUESTION_CATEGORIES:
+            flash(request, "Choose a valid question category.", "error")
+            return redirect_to(request, "index")
+
+        if not config["GEMINI_API_KEY"]:
+            logger.warning(
+                "Cannot generate quiz questions: GEMINI_API_KEY is not configured."
+            )
+            flash(
+                request,
+                "Set the GEMINI_API_KEY environment variable in .env to generate questions. "
+                "See quiz_game.log for diagnostics.",
+                "error",
+            )
+            return redirect_to(request, "index")
+
+        try:
+            questions = await run_in_threadpool(
+                question_generator, config["GEMINI_API_KEY"], ROUNDS, category
+            )
+        except QuestionGenerationError as error:
+            logger.warning("Question generation failed: %s", error)
+            flash(request, str(error), "error")
+            return redirect_to(request, "index")
+        questions = [
+            Question(item["question"], item["options"], item["correct"])
+            for item in questions
+        ]
+        logger.info("Generated %d questions from Gemini.", len(questions))
         if not questions:
-            flash(request, "There are no questions available right now.", "error")
+            logger.warning("Gemini returned no quiz questions.")
+            flash(
+                request,
+                "Gemini did not generate any questions. Please try again.",
+                "error",
+            )
             return redirect_to(request, "index")
 
         match_code = secrets.token_urlsafe(9)
         game_data = {
             "match_code": match_code,
+            "category": category,
             "players": [player_name, None],
             "scores": {player_name: 0},
             "questions": [

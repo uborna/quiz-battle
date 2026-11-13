@@ -6,17 +6,24 @@
   <section class="rise relative pt-2 sm:pt-8" aria-labelledby="page-title">
     <p class="eyebrow mb-6">The quick-fire quiz</p>
     <h1 id="page-title" class="hero-title max-w-3xl font-extrabold">Quiz<span class="text-lime">.</span><br><span class="text-paper/90">Battle</span></h1>
-    <p class="mt-7 max-w-lg text-base leading-7 text-muted sm:text-lg sm:leading-8">{{ round_count }} questions. Two players. Thirty seconds to make it count. Challenge a friend and see who knows their stuff.</p>
+    <p class="mt-7 max-w-lg text-base leading-7 text-muted sm:text-lg sm:leading-8">{{ round_count }} AI-generated questions. Two players. Thirty seconds to make it count. Challenge a friend and see who knows their stuff.</p>
 
     <form action="{{ url_for('start_game') }}" method="post" class="surface mt-9 max-w-xl p-5 sm:mt-10 sm:p-6">
-      <label class="block text-xs font-bold uppercase tracking-[.13em] text-muted" for="player-name">Start your match</label>
-      <div class="mt-3 flex flex-col gap-3 sm:flex-row">
+      <p class="block text-xs font-bold uppercase tracking-[.13em] text-muted">Start your match</p>
+      <label class="mt-4 block text-xs font-bold uppercase tracking-[.13em] text-muted" for="question-category">Question category</label>
+      <select id="question-category" name="category" required class="text-input mt-2 w-full px-4 py-3.5 text-sm">
+        {% for category in question_categories %}
+          <option value="{{ category }}">{{ category }}</option>
+        {% endfor %}
+      </select>
+      <label class="mt-4 block text-xs font-bold uppercase tracking-[.13em] text-muted" for="player-name">Your name</label>
+      <div class="mt-2 flex flex-col gap-3 sm:flex-row">
         <input id="player-name" name="player_name" maxlength="24" required autocomplete="off" placeholder="Enter your name" class="text-input min-w-0 flex-1 px-4 py-3.5 text-sm" />
         <button class="action-button group flex items-center justify-between gap-6 px-5 py-3.5 text-left text-sm font-extrabold" type="submit">
           <span>Create a room</span><span class="text-lg transition-transform group-hover:translate-x-1" aria-hidden="true">&#8594;</span>
         </button>
       </div>
-      <p class="mt-3 text-xs leading-5 text-muted">Create a private room, then share the invite link with your opponent.</p>
+      <p class="mt-3 text-xs leading-5 text-muted">Create a private room, then share the invite link with your opponent. {% if api_key_configured %}Fresh questions are generated for every match.{% else %}Set GEMINI_API_KEY on the server to generate questions and create a match.{% endif %}</p>
     </form>
 
     <div class="mt-6 grid max-w-xl grid-cols-3 gap-2 sm:gap-3" aria-label="Scoring rules">
