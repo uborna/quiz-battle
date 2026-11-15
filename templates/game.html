@@ -1,125 +1,144 @@
 {% extends "base.html" %}
-{% block title %}Quiz Club / Match{% endblock %}
+{% from "_icons.html" import icon %}
+{% block title %}Quiz Battle / Match{% endblock %}
 {% block content %}
-<div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-6">
-  <section class="rise game-card min-w-0 p-5 sm:p-8 lg:p-9" {% if game.phase == 'lobby' %}aria-labelledby="lobby-title"{% elif game.phase == 'feedback' or your_turn %}aria-labelledby="question-title"{% else %}aria-label="Waiting for your turn"{% endif %}>
-    {% if game.phase == 'lobby' %}
-      <div class="max-w-3xl py-2 sm:py-3">
-        <p class="eyebrow">Match lobby <span class="text-muted/60">/</span> {{ game.category }} <span class="text-muted/60">/</span> Room {{ game.match_code }}</p>
-        <h1 id="lobby-title" class="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">Get ready to play.</h1>
-        <p class="mt-3 max-w-lg text-sm leading-6 text-muted">The room is set. Get comfortable, then ready up when you’re good to go.</p>
-        <div class="mt-7 grid gap-3 sm:grid-cols-2">
-          {% for player in game.players %}
-            <div class="lobby-player">
-              <div class="flex items-center justify-between gap-3">
-                <span class="grid h-9 w-9 place-items-center rounded-lg bg-white/[.04] font-mono text-xs text-lime">0{{ loop.index }}</span>
-                {% if loop.index0 in game.joined %}<span class="rounded-full border border-lime/20 bg-lime/10 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-lime">Joined</span>
-                {% else %}<span class="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-muted">Invite sent</span>{% endif %}
-              </div>
-              <p class="mt-4 truncate text-sm font-bold">{{ player or 'Waiting for player two' }}</p>
-              <p class="mt-1 text-[10px] uppercase tracking-[.14em] {% if loop.index0 in game.ready_players %}text-lime{% else %}text-muted{% endif %}">{{ 'Ready to play' if loop.index0 in game.ready_players else 'Waiting to ready up' }}</p>
-            </div>
-          {% endfor %}
-        </div>
-        {% if player_index == 0 %}
-          <div class="surface-soft mt-5 flex flex-col gap-2 p-2 sm:flex-row">
-            <input id="invite-link" readonly value="{{ invite_url }}" class="text-input min-w-0 flex-1 border-0 bg-transparent px-3 py-2.5 text-xs" aria-label="Player two invite link" />
-            <button id="copy-invite" type="button" class="rounded-lg border border-white/10 bg-white/[.04] px-4 py-3 text-xs font-bold transition hover:border-lime/40 hover:text-lime">Copy invite</button>
+{% macro versus() %}
+  <div class="versus" aria-label="Scoreboard">
+    {% for player in game.players %}
+      <div class="vs-card {% if game.phase == 'question' and loop.index0 == game.active_player %}active{% endif %}">
+        <span class="avatar {% if loop.index0 == 1 %}p2{% endif %}" aria-hidden="true">{{ (player or '?')[:1]|upper }}</span>
+        <p class="w-full truncate px-1 text-xs font-bold text-muted">{{ player or 'Waiting...' }}</p>
+        <p class="font-display text-2xl font-bold leading-none">{{ game.scores[player] if player else 0 }}<span class="ml-1 text-xs font-semibold text-muted">pts</span></p>
+      </div>
+      {% if loop.first %}<span class="vs-mark" aria-hidden="true">VS</span>{% endif %}
+    {% endfor %}
+  </div>
+{% endmacro %}
+{% macro rounds() %}
+  <div class="progress" aria-hidden="true">{% for n in range(1, total_rounds + 1) %}<i class="{% if n < round_number %}done{% elif n == round_number %}now{% endif %}"></i>{% endfor %}</div>
+{% endmacro %}
+<div class="lg:grid lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
+<section class="rise min-w-0" {% if game.phase == 'lobby' %}aria-labelledby="lobby-title"{% elif game.phase == 'feedback' or your_turn %}aria-labelledby="question-title"{% else %}aria-label="Waiting for your turn"{% endif %}>
+{% if game.phase == 'lobby' %}
+  <div class="hero">
+    <p class="eyebrow">Lobby &middot; {{ game.category }} &middot; Room {{ game.match_code }}</p>
+    <h1 id="lobby-title" class="font-display h-title mt-2 font-bold">Get ready<br>to play.</h1>
+    <p class="mt-2 max-w-[17rem] text-sm font-semibold leading-6 text-white/90">The room is set. Get comfortable, then ready up when you’re good to go.</p>
+  </div>
+  <div class="card mt-5 p-5 sm:p-7">
+    <div class="space-y-3">
+      {% for player in game.players %}
+        <div class="flex items-center gap-3 rounded-2xl p-3.5 {% if loop.index0 in game.ready_players %}bg-mint/15 ring-1 ring-mint/50{% else %}bg-white/5{% endif %}">
+          <span class="avatar {% if loop.index0 == 1 %}p2{% endif %}" aria-hidden="true">{{ (player or '?')[:1]|upper }}</span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-bold">{{ player or 'Waiting for player two' }}</p>
+            <p class="text-xs font-bold {% if loop.index0 in game.ready_players %}text-mint{% else %}text-muted{% endif %}">{{ 'Ready to play' if loop.index0 in game.ready_players else 'Waiting to ready up' }}</p>
           </div>
-        {% endif %}
-        <div class="mt-7">
-          {% if player_ready %}
-            <div class="surface-soft flex items-center gap-3 px-4 py-4 text-sm text-muted" role="status"><span class="h-2 w-2 rounded-full bg-lime shadow-[0_0_12px_#d3f27a]"></span><span>You’re ready. Waiting for the other player ({{ ready_count }}/2).</span></div>
-          {% else %}
-            <form action="{{ url_for('player_ready') }}" method="post">
-              <button class="action-button group flex w-full items-center justify-between px-5 py-4 text-left font-extrabold sm:w-auto sm:min-w-56" type="submit">
-                <span>I’m ready</span><span class="text-lg transition-transform group-hover:translate-x-1" aria-hidden="true">&#8594;</span>
-              </button>
-            </form>
-          {% endif %}
+          {% if loop.index0 in game.joined %}<span class="chip chip-ok">{{ icon('check', 14) }} Joined</span>{% else %}<span class="chip">Invite sent</span>{% endif %}
         </div>
-        {% if joined_count < 2 %}<p class="mt-4 text-xs text-muted">The game starts after both players join and are ready.</p>{% endif %}
-      </div>
-    {% elif game.phase == 'feedback' %}
-      <div class="mb-7 flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[.16em] text-muted"><span>Round {{ round_number }} <span class="text-white/20">/</span> {{ total_rounds }}</span><span class="rounded-full border border-lime/20 bg-lime/10 px-3 py-1.5 text-lime">Round complete</span></div>
-      <p class="eyebrow">Answer reveal</p>
-      <h1 id="question-title" class="mt-4 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">{{ question.text }}</h1>
-      <p class="surface-soft mt-5 inline-flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-muted">Correct answer: <span class="font-bold text-lime">{{ game.correct_text }}</span></p>
-      <div class="mt-6 space-y-2">
-        {% for answer in game.feedback %}
-          <div class="surface-soft flex flex-wrap items-center gap-3 px-4 py-4 sm:gap-5 {% if answer.correct %}answer-correct border-lime/20{% endif %}">
-            <span class="min-w-28 flex-1 font-bold">{{ answer.player }}</span>
-            <span class="font-mono text-xs text-muted">{{ answer.choice or '--' }}{% if answer.answer_text %} · {{ answer.answer_text }}{% endif %}{% if answer.timed_out %} / TIME{% endif %}</span>
-            {% if answer.correct %}<span class="correct-answer-badge rounded-full bg-lime/10 px-3 py-1.5 font-mono text-[10px] text-lime">✓ CORRECT +{{ answer.score_earned }}</span>
-            {% else %}<span class="rounded-full bg-coral/10 px-3 py-1.5 font-mono text-[10px] text-coral">{{ 'TOO SLOW' if answer.timed_out else 'NOT THIS TIME' }}</span>{% endif %}
-            <span class="score-chip font-mono text-[10px] text-paper">{{ game.scores[answer.player] }} PTS</span>
-          </div>
-        {% endfor %}
-      </div>
-      <form action="{{ url_for('continue_game') }}" method="post" class="mt-8">
-        {% if player_ready %}
-          <div class="surface-soft flex items-center gap-3 px-4 py-4 text-sm text-muted" role="status"><span class="h-2 w-2 rounded-full bg-lime shadow-[0_0_12px_#d3f27a]"></span><span>You’re ready. Waiting for the other player ({{ ready_count }}/2).</span></div>
-        {% else %}
-          <button class="action-button group flex w-full items-center justify-between px-5 py-4 text-left font-extrabold sm:w-auto sm:min-w-64" type="submit">
-            <span>{{ 'Finish match' if round_number == total_rounds else 'Next question' }}</span><span class="text-lg transition-transform group-hover:translate-x-1" aria-hidden="true">&#8594;</span>
-          </button>
-        {% endif %}
-      </form>
-    {% else %}
-      <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div><p class="eyebrow">Question {{ '%02d'|format(round_number) }} <span class="text-muted/60">/</span> {{ '%02d'|format(total_rounds) }}</p><p class="mt-2 text-xs text-muted">Take your time, but not too much.</p></div>
-        <div class="flex gap-2">
-          {% for player in game.players %}<div class="score-chip text-right"><p class="truncate font-mono text-[9px] uppercase text-muted">{{ player }}</p><p class="mt-1 text-sm font-bold text-paper">{{ game.scores[player] }} <span class="text-[10px] font-normal text-muted">pts</span></p></div>{% endfor %}
-        </div>
-      </div>
-      <div class="mb-7 h-1.5 overflow-hidden rounded-full bg-white/[.07]"><div class="h-full rounded-full bg-lime transition-all" style="width: {{ (round_number / total_rounds * 100)|round|int }}%"></div></div>
-      <div class="surface-soft p-5 sm:p-7">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="rounded-full border border-lime/20 bg-lime/10 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-lime">{{ game.players[game.active_player] }}'s turn</span>
-          {% if your_turn %}<span class="ml-auto flex items-center gap-2 font-mono text-xs text-muted"><span class="h-1.5 w-1.5 rounded-full bg-lime"></span><span id="time-remaining">{{ time_limit }}</span> SEC</span>{% endif %}
-        </div>
-        {% if your_turn %}
-          <h1 id="question-title" class="mt-5 max-w-3xl text-3xl font-extrabold leading-tight tracking-tight sm:mt-7 sm:text-5xl">{{ question.text }}</h1>
-          <form action="{{ url_for('submit_answer') }}" method="post" class="mt-7" id="answer-form">
-            <fieldset>
-              <legend class="sr-only">Choose an answer</legend>
-              <div class="grid gap-2.5 sm:grid-cols-2">
-                {% for option in question.options %}
-                  {% set letter = 'ABCD'[loop.index0] %}
-                  <label class="option-card group flex min-h-[4.25rem] cursor-pointer items-center gap-4 px-4 py-3">
-                    <input type="radio" name="choice" value="{{ letter }}" required class="sr-only" />
-                    <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[.03] font-mono text-xs text-muted transition group-has-[:checked]:border-lime group-has-[:checked]:bg-lime group-has-[:checked]:text-ink">{{ letter }}</span>
-                    <span class="text-sm font-semibold">{{ option }}</span>
-                  </label>
-                {% endfor %}
-              </div>
-            </fieldset>
-            <button id="answer-submit" class="action-button group mt-5 flex min-w-52 items-center justify-between px-5 py-3.5 text-left text-sm font-extrabold disabled:cursor-wait disabled:opacity-60" type="submit"><span>Lock in answer</span><span aria-hidden="true">&#8594;</span></button>
-          </form>
-        {% else %}
-          <div class="surface-soft mt-8 flex items-start gap-3 p-4 text-sm leading-6 text-muted"><span class="mt-1 h-2 w-2 shrink-0 animate-pulse rounded-full bg-lime"></span><span>Waiting for {{ game.players[game.active_player] }} to answer. You can message them while you wait.</span></div>
-        {% endif %}
+      {% endfor %}
+    </div>
+    {% if player_index == 0 %}
+      <div class="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-2 pl-4">
+        <input id="invite-link" readonly value="{{ invite_url }}" class="min-w-0 flex-1 bg-transparent text-sm font-semibold" aria-label="Player two invite link" />
+        <button id="copy-invite" type="button" class="btn btn-ghost">{{ icon('copy', 16) }}<span>Copy invite</span></button>
       </div>
     {% endif %}
-  </section>
-
-  <aside class="chat-shell rise overflow-hidden" aria-labelledby="chat-title" style="animation-delay: .08s">
-    <div class="flex items-center justify-between border-b border-white/10 px-4 py-4">
-      <div><h2 id="chat-title" class="text-sm font-extrabold">Match chat</h2><p class="mt-1 max-w-48 truncate text-[10px] text-muted">{{ game.players[0] }} &middot; {{ game.players[1] or 'Waiting for player two' }}</p></div>
-      <span class="flex items-center gap-2 rounded-full border border-lime/15 bg-lime/[.06] px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wider text-lime"><span class="h-1.5 w-1.5 rounded-full bg-lime shadow-[0_0_8px_#d3f27a]"></span> Live</span>
+    <div class="mt-5">
+      {% if player_ready %}
+        <div class="flex items-center gap-3 rounded-2xl bg-mint/15 px-4 py-4 text-sm font-bold" role="status"><span class="text-mint">{{ icon('check') }}</span><span>You’re ready. Waiting for the other player ({{ ready_count }}/2).</span></div>
+      {% else %}
+        <form action="{{ url_for('player_ready') }}" method="post"><button class="btn" type="submit"><span>I’m ready</span>{{ icon('arrow') }}</button></form>
+      {% endif %}
     </div>
-    <div id="chat-messages" class="flex h-64 flex-col gap-2.5 overflow-y-auto px-3 py-4 sm:h-72 sm:px-4" role="log" aria-live="polite" aria-relevant="additions"></div>
-    <form id="chat-form" class="flex gap-2 border-t border-white/10 p-3">
-      <label class="sr-only" for="chat-input">Message</label>
-      <input id="chat-input" maxlength="500" autocomplete="off" placeholder="Write a message..." class="text-input min-w-0 flex-1 px-3 py-2.5 text-xs placeholder:text-muted/60" />
-      <button type="submit" aria-label="Send message" title="Send message" class="action-button grid h-11 w-11 shrink-0 place-items-center rounded-lg font-bold text-ink"><span aria-hidden="true">&#8594;</span></button>
-    </form>
-  </aside>
+    {% if joined_count < 2 %}<p class="mt-3 text-center text-xs font-semibold text-muted">The game starts after both players join and are ready.</p>{% endif %}
+  </div>
+{% elif game.phase == 'feedback' %}
+  <div class="flex items-center justify-between"><span class="chip chip-violet">Round {{ round_number }} / {{ total_rounds }}</span><span class="chip chip-gold">Round complete</span></div>
+  <div class="mt-3">{{ rounds() }}</div>
+  <div class="mt-4">{{ versus() }}</div>
+  <div class="card mt-5 p-5 sm:p-7">
+    <p class="eyebrow">Answer reveal</p>
+    <h1 id="question-title" class="font-display h-question mt-2 font-semibold">{{ question.text }}</h1>
+    <p class="mt-4 flex flex-wrap items-center gap-2 rounded-2xl bg-mint/15 px-4 py-3 text-sm font-bold ring-1 ring-mint/40"><span class="text-mint">{{ icon('check', 18) }}</span> Correct answer: <span class="text-mint">{{ game.correct_text }}</span></p>
+    <div class="mt-4 space-y-3">
+      {% for answer in game.feedback %}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl p-4 {% if answer.correct %}answer-correct bg-mint/12 ring-1 ring-mint/40{% else %}bg-coral/10 ring-1 ring-coral/35{% endif %}">
+          <span class="min-w-24 flex-1 font-bold">{{ answer.player }}</span>
+          {% if answer.correct %}<span class="correct-answer-badge chip chip-ok">{{ icon('check', 14) }} Correct +{{ answer.score_earned }}</span>
+          {% else %}<span class="chip chip-bad">{{ icon('x', 14) }} {{ 'Too slow' if answer.timed_out else 'Not this time' }}</span>{% endif %}
+          <span class="basis-full text-xs font-semibold text-muted">{{ answer.choice or '--' }}{% if answer.answer_text %} · {{ answer.answer_text }}{% endif %}{% if answer.timed_out %} / TIME{% endif %}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  <form action="{{ url_for('continue_game') }}" method="post" class="sticky-action mt-5">
+    {% if player_ready %}
+      <div class="flex items-center gap-3 rounded-2xl bg-surface px-4 py-4 text-sm font-bold ring-1 ring-mint/40" style="background:var(--surface)" role="status"><span class="text-mint">{{ icon('check') }}</span><span>You’re ready. Waiting for the other player ({{ ready_count }}/2).</span></div>
+    {% else %}
+      <button class="btn" type="submit"><span>{{ 'Finish match' if round_number == total_rounds else 'Next question' }}</span>{{ icon('arrow') }}</button>
+    {% endif %}
+  </form>
+{% else %}
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <span class="chip chip-violet">Question {{ '%02d'|format(round_number) }} / {{ '%02d'|format(total_rounds) }}</span>
+      <p class="mt-2 text-sm font-bold text-muted"><span class="text-gold">{{ game.players[game.active_player] }}'s turn</span></p>
+    </div>
+    {% if your_turn %}
+      <div class="ring" role="timer" aria-label="Time remaining">
+        <svg width="58" height="58" viewBox="0 0 60 60" fill="none" stroke-width="6" stroke-linecap="round" aria-hidden="true"><circle class="ring-track" cx="30" cy="30" r="26"/><circle id="time-bar" class="ring-fill" cx="30" cy="30" r="26" stroke-dasharray="163.36" stroke-dashoffset="0"/></svg>
+        <span class="ring-num"><span id="time-remaining">{{ time_limit }}</span></span>
+      </div>
+    {% endif %}
+  </div>
+  <div class="mt-4">{{ rounds() }}</div>
+  <div class="mt-4">{{ versus() }}</div>
+  <div class="card mt-5 p-5 sm:p-7">
+    {% if your_turn %}
+      <h1 id="question-title" class="font-display h-question font-semibold">{{ question.text }}</h1>
+      <form action="{{ url_for('submit_answer') }}" method="post" class="mt-5" id="answer-form">
+        <fieldset>
+          <legend class="sr-only">Choose an answer</legend>
+          <div class="options-grid">
+            {% for option in question.options %}
+              {% set letter = 'ABCD'[loop.index0] %}
+              <label class="option">
+                <input type="radio" name="choice" value="{{ letter }}" required class="sr-only" />
+                <span class="option-letter">{{ letter }}</span>
+                <span class="font-bold leading-snug">{{ option }}</span>
+                <span class="option-radio">{{ icon('check', 14) }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <div class="sticky-action mt-5"><button id="answer-submit" class="btn sm:!mx-auto sm:!flex sm:max-w-sm" type="submit"><span>Lock in answer</span>{{ icon('arrow') }}</button></div>
+      </form>
+    {% else %}
+      <div class="flex items-start gap-3 text-sm font-bold leading-6" role="status"><span class="mt-2 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-gold"></span><span>Waiting for {{ game.players[game.active_player] }} to answer. You can message them while you wait.</span></div>
+    {% endif %}
+  </div>
+{% endif %}
+</section>
+
+<aside class="card rise stack-sticky mt-5 overflow-hidden lg:mt-0" aria-labelledby="chat-title" style="animation-delay:.08s">
+  <div class="flex items-center justify-between px-5 pt-4">
+    <div><h2 id="chat-title" class="font-display text-lg font-semibold">Match chat</h2><p class="max-w-52 truncate text-xs font-semibold text-muted">{{ game.players[0] }} &middot; {{ game.players[1] or 'Waiting for player two' }}</p></div>
+    <span class="chip chip-ok"><span class="h-2 w-2 rounded-full bg-mint"></span> Live</span>
+  </div>
+  <div id="chat-messages" class="flex h-56 flex-col lg:h-80 gap-2.5 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-relevant="additions"></div>
+  <form id="chat-form" class="flex gap-2 border-t border-white/10 p-3">
+    <label class="sr-only" for="chat-input">Message</label>
+    <input id="chat-input" maxlength="500" autocomplete="off" placeholder="Write a message..." class="field min-w-0 flex-1 !min-h-11 !rounded-full !px-4 !py-2 !text-sm" />
+    <button type="submit" aria-label="Send message" title="Send message" class="btn !w-11 !min-h-11 shrink-0 !rounded-full !p-0">{{ icon('send', 18) }}</button>
+  </form>
+</aside>
 </div>
 <script>
   (() => {
     const initialStateKey = {{ state_key|tojson }};
     const playerIndex = {{ player_index }};
+    const timeLimit = {{ time_limit|tojson }};
     const messages = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
     const chatInput = document.getElementById('chat-input');
@@ -129,10 +148,10 @@
       const wrapper = document.createElement('div');
       wrapper.className = 'chat-bubble';
       const metadata = document.createElement('p');
-      metadata.className = 'font-mono text-[9px] text-muted';
+      metadata.className = 'text-[11px] font-bold text-muted';
       metadata.textContent = `${message.sender} / ${message.time}`;
       const content = document.createElement('p');
-      content.className = 'mt-1 break-words text-xs leading-5 text-paper';
+      content.className = 'mt-0.5 break-words text-sm font-semibold leading-5';
       content.textContent = message.text;
       wrapper.append(metadata, content);
       messages.append(wrapper);
@@ -187,7 +206,7 @@
     if (inviteButton) {
       inviteButton.addEventListener('click', async () => {
         await navigator.clipboard.writeText(document.getElementById('invite-link').value);
-        inviteButton.textContent = 'Copied';
+        inviteButton.querySelector('span').textContent = 'Copied';
       });
     }
 
@@ -195,6 +214,8 @@
     if (answerForm) {
       let timeoutSubmitted = false;
       const timerText = document.getElementById('time-remaining');
+      const timerBar = document.getElementById('time-bar');
+      const circumference = 163.36;
       answerForm.addEventListener('submit', () => {
         document.getElementById('answer-submit').disabled = true;
       });
@@ -205,6 +226,9 @@
           const clock = await response.json();
           if (clock.active_player !== playerIndex || clock.remaining === null) return;
           timerText.textContent = String(Math.ceil(clock.remaining));
+          const ratio = Math.max(0, Math.min(1, clock.remaining / timeLimit));
+          timerBar.style.strokeDashoffset = String(circumference * (1 - ratio));
+          timerBar.classList.toggle('low', ratio <= 0.25);
           if (clock.remaining <= 0 && !timeoutSubmitted) {
             timeoutSubmitted = true;
             answerForm.noValidate = true;

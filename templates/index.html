@@ -1,64 +1,57 @@
 {% extends "base.html" %}
-{% block title %}Quiz Club / Start a match{% endblock %}
+{% from "_icons.html" import icon %}
+{% block title %}Quiz Battle / Start a match{% endblock %}
 {% block content %}
-<div class="hero-orb" aria-hidden="true"></div>
-<div class="grid items-start gap-12 lg:grid-cols-[1.12fr_.88fr] lg:gap-16">
-  <section class="rise relative pt-2 sm:pt-8" aria-labelledby="page-title">
-    <p class="eyebrow mb-6">The quick-fire quiz</p>
-    <h1 id="page-title" class="hero-title max-w-3xl font-extrabold">Quiz<span class="text-lime">.</span><br><span class="text-paper/90">Battle</span></h1>
-    <p class="mt-7 max-w-lg text-base leading-7 text-muted sm:text-lg sm:leading-8">{{ round_count }} AI-generated questions. Two players. Thirty seconds to make it count. Challenge a friend and see who knows their stuff.</p>
-
-    <form action="{{ url_for('start_game') }}" method="post" class="surface mt-9 max-w-xl p-5 sm:mt-10 sm:p-6">
-      <p class="block text-xs font-bold uppercase tracking-[.13em] text-muted">Start your match</p>
-      <label class="mt-4 block text-xs font-bold uppercase tracking-[.13em] text-muted" for="question-category">Question category</label>
-      <select id="question-category" name="category" required class="text-input mt-2 w-full px-4 py-3.5 text-sm">
-        {% for category in question_categories %}
-          <option value="{{ category }}">{{ category }}</option>
-        {% endfor %}
-      </select>
-      <label class="mt-4 block text-xs font-bold uppercase tracking-[.13em] text-muted" for="player-name">Your name</label>
-      <div class="mt-2 flex flex-col gap-3 sm:flex-row">
-        <input id="player-name" name="player_name" maxlength="24" required autocomplete="off" placeholder="Enter your name" class="text-input min-w-0 flex-1 px-4 py-3.5 text-sm" />
-        <button class="action-button group flex items-center justify-between gap-6 px-5 py-3.5 text-left text-sm font-extrabold" type="submit">
-          <span>Create a room</span><span class="text-lg transition-transform group-hover:translate-x-1" aria-hidden="true">&#8594;</span>
-        </button>
-      </div>
-      <p class="mt-3 text-xs leading-5 text-muted">Create a private room, then share the invite link with your opponent. {% if api_key_configured %}Fresh questions are generated for every match.{% else %}Set GEMINI_API_KEY on the server to generate questions and create a match.{% endif %}</p>
-    </form>
-
-    <div class="mt-6 grid max-w-xl grid-cols-3 gap-2 sm:gap-3" aria-label="Scoring rules">
-      <div class="stat-card"><p class="font-mono text-2xl font-medium text-paper">+10</p><p class="mt-1 text-[10px] uppercase tracking-[.12em] text-muted sm:text-[11px]">Correct</p></div>
-      <div class="stat-card"><p class="font-mono text-2xl font-medium text-lime">+3</p><p class="mt-1 text-[10px] uppercase tracking-[.12em] text-muted sm:text-[11px]">Fast bonus</p></div>
-      <div class="stat-card"><p class="font-mono text-2xl font-medium text-paper">30s</p><p class="mt-1 text-[10px] uppercase tracking-[.12em] text-muted sm:text-[11px]">Per turn</p></div>
+<section class="rise grid gap-5 lg:grid-cols-[1.05fr_.95fr] lg:items-start lg:gap-6" aria-labelledby="page-title">
+  <div class="hero lg:col-start-1">
+    <p class="eyebrow">The quick-fire quiz</p>
+    <h1 id="page-title" class="font-display h-hero mt-2 font-bold">Quiz<br>Battle</h1>
+    <p class="mt-3 max-w-[16rem] text-sm font-semibold leading-6 text-white/90 sm:max-w-md sm:text-base sm:leading-7">{{ round_count }} AI-generated questions. Two players. Thirty seconds to make it count. Challenge a friend and see who knows their stuff.</p>
+    <div class="mt-5 flex flex-wrap gap-2" aria-label="Scoring rules">
+      <span class="chip" style="background:rgb(255 255 255 / 20%)">+10 correct</span>
+      <span class="chip" style="background:rgb(255 255 255 / 20%)">+3 fast</span>
+      <span class="chip" style="background:rgb(255 255 255 / 20%)">30s</span>
     </div>
-  </section>
+  </div>
 
-  <aside class="surface rise mt-2 p-5 sm:p-7 lg:mt-8" style="animation-delay: .1s" aria-labelledby="scores-title">
-    <div class="flex items-center justify-between gap-4">
-      <div><p class="font-mono text-[10px] uppercase tracking-[.18em] text-muted">The regulars</p><h2 id="scores-title" class="mt-2 text-2xl font-extrabold tracking-tight">Hall of fame</h2></div>
-      <span class="rounded-full border border-lime/20 bg-lime/10 px-3 py-1.5 font-mono text-[10px] text-lime">TOP 05</span>
+  <form action="{{ url_for('start_game') }}" method="post" class="card p-5 sm:p-7 lg:col-start-1">
+    <h2 class="font-display text-xl font-semibold sm:text-2xl">Start your match</h2>
+    <label class="label mt-4" for="question-category">Question category</label>
+    <select id="question-category" name="category" required class="field">
+      {% for category in question_categories %}
+        <option value="{{ category }}">{{ category }}</option>
+      {% endfor %}
+    </select>
+    <label class="label mt-4" for="player-name">Your name</label>
+    <input id="player-name" name="player_name" maxlength="24" required autocomplete="off" placeholder="Enter your name" class="field" />
+    <button class="btn mt-5" type="submit"><span>Create a room</span>{{ icon('arrow') }}</button>
+    <p class="mt-3 text-center text-xs font-semibold leading-5 text-muted">Create a private room, then share the invite link with your opponent. {% if api_key_configured %}Fresh questions are generated for every match.{% else %}Set GEMINI_API_KEY on the server to generate questions and create a match.{% endif %}</p>
+  </form>
+
+  <aside class="card p-5 sm:p-7 lg:col-start-2 lg:row-span-2 lg:row-start-1" style="animation-delay:.1s" aria-labelledby="scores-title">
+    <div class="flex items-center justify-between">
+      <div><p class="eyebrow">The regulars</p><h2 id="scores-title" class="font-display mt-1 text-2xl font-semibold">Hall of fame</h2></div>
+      <span class="grid h-12 w-12 place-items-center rounded-2xl bg-gold/20 text-gold float">{{ icon('trophy', 26) }}</span>
     </div>
     {% if leaderboard %}
-      <ol class="mt-5">
+      <ol class="mt-4">
         {% for name, stats in leaderboard %}
-          <li class="leader-row flex items-center gap-3 py-3.5">
-            <span class="leader-rank">0{{ loop.index }}</span>
-            <span class="min-w-0 flex-1 truncate text-sm font-bold">{{ name }}</span>
-            <span class="font-mono text-[10px] text-muted sm:text-xs">{{ stats.wins }} W</span>
-            <span class="w-14 text-right font-mono text-[10px] text-lime sm:w-16 sm:text-xs">{{ stats.points }} PTS</span>
+          <li class="leader-row">
+            <span class="rank">{{ loop.index }}</span>
+            <span class="min-w-0 flex-1 truncate font-bold">{{ name }}</span>
+            <span class="text-xs font-bold text-muted">{{ stats.wins }} W</span>
+            <span class="chip chip-violet">{{ stats.points }} PTS</span>
           </li>
         {% endfor %}
       </ol>
     {% else %}
-      <div class="surface-soft mt-6 px-5 py-8 text-center">
-        <span class="mx-auto grid h-11 w-11 place-items-center rounded-full bg-lime/10 font-mono text-xl text-lime" aria-hidden="true">#</span>
-        <p class="mt-4 text-sm font-bold">A spot is waiting for you.</p>
-        <p class="mt-1 text-xs leading-5 text-muted">Play the first match and make the leaderboard yours.</p>
+      <div class="mt-4 rounded-2xl bg-white/5 px-5 py-8 text-center">
+        <span class="mx-auto grid h-12 w-12 place-items-center rounded-full bg-gold/20 text-gold">{{ icon('trophy') }}</span>
+        <p class="mt-3 font-bold">A spot is waiting for you.</p>
+        <p class="mt-1 text-sm text-muted">Play the first match and make the leaderboard yours.</p>
       </div>
     {% endif %}
-    <div class="mt-5 flex items-center gap-2 border-t border-white/10 pt-4 text-[10px] text-muted">
-      <span class="h-1.5 w-1.5 rounded-full bg-lime"></span> Wins first, then total points
-    </div>
+    <p class="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-muted">{{ icon('bolt', 14) }} Wins first, then total points</p>
   </aside>
-</div>
+</section>
 {% endblock %}

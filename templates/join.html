@@ -1,29 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Quiz Club / Join match{% endblock %}
+{% from "_icons.html" import icon %}
+{% block title %}Quiz Battle / Join match{% endblock %}
 {% block content %}
-<section class="rise mx-auto max-w-2xl py-2 sm:py-8" aria-labelledby="join-title">
-  <div class="surface relative overflow-hidden p-6 sm:p-10">
-    <div class="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full border border-lime/10 bg-lime/[.035]"></div>
-    <div class="relative">
-      <p class="eyebrow">You have an invite</p>
-      <h1 id="join-title" class="mt-5 text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">Ready to<br><span class="text-lime">go head-to-head?</span></h1>
-      <p class="mt-5 max-w-lg text-sm leading-6 text-muted sm:text-base">Pick a name and step into the room. You’ll be able to ready up as soon as you arrive.</p>
-
-      <div class="surface-soft mt-7 flex items-center gap-4 p-4 sm:mt-9">
-        <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-lime/10 font-mono text-lg text-lime" aria-hidden="true">VS</span>
-        <div><p class="text-sm font-bold">One room. Two minds.</p><p class="mt-1 text-xs leading-5 text-muted">Quick questions, friendly rivalry, bragging rights.</p></div>
-      </div>
-
-      {% if error %}<p class="flash-error mt-5 px-4 py-3 text-sm" role="alert">{{ error }}</p>{% endif %}
-      <form action="{{ url_for('join_game', match_code=match_code) }}" method="post" class="mt-7 sm:mt-8">
-        <label class="block text-xs font-bold uppercase tracking-[.13em] text-muted" for="player-name">Your name
-          <input id="player-name" name="player_name" maxlength="24" required autocomplete="off" autofocus placeholder="Enter your name" class="text-input mt-2 w-full px-4 py-3.5 text-sm" />
-        </label>
-        <button class="action-button group mt-5 flex w-full items-center justify-between px-5 py-4 text-left text-sm font-extrabold sm:w-auto sm:min-w-56" type="submit">
-          <span>Join the room</span><span class="text-lg transition-transform group-hover:translate-x-1" aria-hidden="true">&#8594;</span>
-        </button>
-      </form>
+<section class="rise narrow sm:pt-6" aria-labelledby="join-title">
+  <div class="hero text-center">
+    <div class="flex items-center justify-center gap-3">
+      <span class="avatar lg float" style="background:#fff;color:#4C1D95" aria-hidden="true">?</span>
+      <span class="font-display text-xl font-bold">VS</span>
+      <span class="avatar lg p2 float" style="animation-delay:.5s" aria-hidden="true">You</span>
     </div>
+    <p class="eyebrow mt-5">You have an invite</p>
+    <h1 id="join-title" class="font-display h-title mt-2 font-bold">Ready to go head-to-head?</h1>
+  </div>
+  <div class="card mt-5 p-5 sm:p-7">
+    <p class="text-sm font-semibold leading-6 text-muted">Pick a name and step into the room. You’ll be able to ready up as soon as you arrive.</p>
+    {% if error %}<p class="flash mt-4 px-4 py-3 text-sm" role="alert">{{ error }}</p>{% endif %}
+    <form action="{{ url_for('join_game', match_code=match_code) }}" method="post" class="mt-4">
+      <label class="label" for="player-name">Your name</label>
+      <input id="player-name" name="player_name" maxlength="24" required autocomplete="off" autofocus placeholder="Enter your name" class="field" />
+      <button class="btn mt-5" type="submit"><span>Join the room</span>{{ icon('arrow') }}</button>
+    </form>
   </div>
 </section>
 {% endblock %}
