@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from app_log import AppLog
-from engine import Match, POINTS, Question, ROUNDS, SPEED_BONUS, TIME_LIMIT
+from engine import Match, Question, ROUNDS, TIME_LIMIT, answer_score
 from question_generator import QuestionGenerationError, generate_questions
 from storage import AnswerStore, ScoreBoard
 
@@ -41,8 +41,7 @@ def create_app(
     test_config=None,
     leaderboard_path=None,
     database_path=None,
-    question_generator=None,
-):
+    question_generator=None,):
     config = {
         "SECRET_KEY": os.environ.get("SECRET_KEY", "local-quiz-game-key-change-me"),
         "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY"),
@@ -115,11 +114,7 @@ def create_app(
             question.options[ord(choice) - ord("A")] if choice is not None else None
         )
         correct = question.is_correct(choice) and elapsed <= TIME_LIMIT
-        score = (
-            POINTS + (SPEED_BONUS if elapsed <= TIME_LIMIT / 2 else 0)
-            if correct
-            else 0
-        )
+        score = answer_score(correct, elapsed)
         answer_store.record_answer(
             match_code,
             game_data["players"][player_index],
@@ -154,11 +149,7 @@ def create_app(
                 question.is_correct(answer["choice"])
                 and answer["elapsed"] <= TIME_LIMIT
             )
-            score_earned = (
-                POINTS + (SPEED_BONUS if answer["elapsed"] <= TIME_LIMIT / 2 else 0)
-                if correct
-                else 0
-            )
+            score_earned = answer_score(correct, answer["elapsed"])
             choice = answer["choice"]
             feedback.append(
                 {

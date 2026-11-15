@@ -22,3 +22,16 @@ def test_record_saves_wins_and_points(tmp_path):
         ("Player 1", {"wins": 1, "points": 13}),
         ("Player 2", {"wins": 0, "points": 10}),
     ]
+
+
+def test_record_creates_missing_parent_directory(tmp_path):
+    path = tmp_path / "nested" / "leaderboard.json"
+
+    board = ScoreBoard(str(path))
+    board.record("Player 1", "Player 1", 7, "Player 2", 3)
+
+    assert path.exists()
+    assert ScoreBoard(str(path)).top() == [
+        ("Player 1", {"wins": 1, "points": 7}),
+        ("Player 2", {"wins": 0, "points": 3}),
+    ]

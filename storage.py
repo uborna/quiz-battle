@@ -44,30 +44,40 @@ class AnswerStore:
 
 
 class ScoreBoard:
-    def __init__(self,path:str = LEADERBOARD_PATH) -> None:
+    def __init__(self, path: str = LEADERBOARD_PATH) -> None:
         self._path = Path(path)
-        self._data:dict[str,dict[str,int]] = {}
+        self._data: dict[str, dict[str, int]] = {}
+        self._path.parent.mkdir(parents=True, exist_ok=True)
 
         if self._path.exists():
-            with open(self._path, encoding="utf-8") as f:
-                contents = f.read()
+            with open(self._path, encoding="utf-8") as file:
+                contents = file.read()
             if contents.strip():
                 self._data = json.loads(contents)
+
     def is_empty(self) -> bool:
         return not self._data
-    def record(self,winner:str,player1,score1,player2,score2) -> None:
-        for name,points in [(player1,score1),(player2,score2)]:
+
+    def record(
+        self, winner: str, player1: str, score1: int, player2: str, score2: int
+    ) -> None:
+        for name, points in [(player1, score1), (player2, score2)]:
             if name not in self._data:
-                self._data[name] = {"wins":0,"points":0}
+                self._data[name] = {"wins": 0, "points": 0}
             self._data[name]["points"] += points
 
         if winner is not None:
             self._data[winner]["wins"] += 1
         self._save()
-    def top(self,n:int = 5) -> list[tuple[str,int]]:
-        def wins_then_points(item) -> tuple:
+
+    def top(self, n: int = 5) -> list[tuple[str, dict[str, int]]]:
+        def wins_then_points(item) -> tuple[int, int]:
             return item[1]["wins"], item[1]["points"]
-        return sorted(self._data.items(),key=wins_then_points,reverse=True)[:n]
+
+        return sorted(self._data.items(), key=wins_then_points, reverse=True)[:n]
+
     def _save(self) -> None:
-        with open(self._path,"w",encoding="utf-8")as f:
-            json.dump(self._data,f,ensure_ascii=False,indent=2)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._path, "w", encoding="utf-8") as file:
+            json.dump(self._data, file, ensure_ascii=False, indent=2)
+

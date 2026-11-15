@@ -5,6 +5,12 @@ POINTS = 10
 SPEED_BONUS = 3
 
 
+def answer_score(is_correct: bool, elapsed: float) -> int:
+    if not is_correct or elapsed > TIME_LIMIT:
+        return 0
+    return POINTS + (SPEED_BONUS if elapsed <= TIME_LIMIT / 2 else 0)
+
+
 class Question:
     def __init__(self, text, options, correct):
         self.text = text
@@ -17,7 +23,7 @@ class Question:
         return choice.strip().upper() == self.correct
 
     def correct_text(self):
-        return self.options["ABCD".index(self.correct)]
+        return self.options[ord(self.correct) - ord("A")]
 
 
 class Match:
@@ -26,7 +32,6 @@ class Match:
             raise ValueError("Unique Name per Player!")
 
         self.players = [player1, player2]
-        self.palyers = self.players
         self.questions = questions
         self.scores = {player1: 0, player2: 0}
         self.round = 0
@@ -42,14 +47,14 @@ class Match:
         self.answers[player] = (choice, elapsed)
 
     def send_chat(self, player, message):
-        if player not in self.palyers:
+        if player not in self.players:
             raise ValueError(f"Unknown player: {player}")
         return self.chat.send(player, message)
 
     def resolve_round(self):
         question = self.questions[self.round - 1]
 
-        for player in self.palyers:
+        for player in self.players:
             if player not in self.answers:
                 continue
 
@@ -57,14 +62,13 @@ class Match:
             if elapsed > TIME_LIMIT:
                 continue
             if question.is_correct(choice):
-                bonus = SPEED_BONUS if elapsed <= TIME_LIMIT / 2 else 0
-                self.scores[player] += POINTS + bonus
+                self.scores[player] += answer_score(True, elapsed)
 
     def is_over(self):
         return self.round >= ROUNDS
 
     def winner(self):
-        player1, player2 = self.palyers
+        player1, player2 = self.players
         if self.scores[player1] == self.scores[player2]:
             return None
 
