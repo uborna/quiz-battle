@@ -17,6 +17,12 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app_log import AppLog
 from engine import Match, Question, ROUNDS, TIME_LIMIT, answer_score
+from game_advisor import (
+    GameAdvisorError,
+    answer_game_question,
+    advisor_widget,
+    log_advisor_event,
+)
 from question_generator import QuestionGenerationError, generate_questions
 from storage import AnswerStore, ScoreBoard
 
@@ -72,7 +78,7 @@ def create_app(
         )
 
     def render_template(request, template_name, status_code=200, **context):
-        return templates.TemplateResponse(
+        response = templates.TemplateResponse(
             request=request,
             name=template_name,
             context={
@@ -81,6 +87,34 @@ def create_app(
             },
             status_code=status_code,
         )
+        game_data = context.get("game")
+        should_show_advisor = template_name == "results.html"
+        if template_name == "game.html" and game_data is not None:
+            player_index = context.get("player_index")
+            player_name = game_data["players"][player_index]
+            should_show_advisor = (
+                game_data["phase"] == "feedback"
+                or (
+                    game_data["phase"] == "playing"
+                    and any(
+                        answer["player"] == player_name
+                        for answer in game_data["answers"]
+                    )
+                )
+            )
+        if should_show_advisor:
+            placement = (
+                b"</aside>"
+                if template_name == "game.html"
+                else b"</body>"
+            )
+            response.body = response.body.replace(
+                placement,
+                advisor_widget().encode("utf-8") + placement,
+                1,
+            )
+            response.headers["content-length"] = str(len(response.body))
+        return response
 
     def flash(request, message, category="message"):
         request.session.setdefault("_flashes", []).append((category, message))
@@ -496,6 +530,118 @@ def create_app(
             }
             game_data["chat"].append(message)
         return JSONResponse(message, status_code=201)
+
+    @app.post("/api/advisor", name="ask_game_advisor")
+    async def ask_game_advisor(request: Request):
+        match_code, _, player_index = current_game(request)
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        user_question = str(body.get("question", "")).strip()[:500]
+        if not user_question:
+            log_advisor_event(
+                "rejected",
+                user_question,
+                "Ask a question about this game.",
+                match_code,
+                player_index,
+            )
+            return JSONResponse(
+                {"error": "Ask a question about this game."}, status_code=400
+            )
+        with games_lock:
+            game_data = copy.deepcopy(games[match_code])
+        has_answered = any(
+            answer["player"] == game_data["players"][player_index]
+            for answer in game_data["answers"]
+        )
+        if game_data["phase"] not in ("feedback", "done") and not (
+            game_data["phase"] == "playing" and has_answered
+        ):
+            error_message = (
+                "The game advisor is available after you answer a "
+                "question and at the end of the game."
+            )
+            log_advisor_event(
+                "rejected",
+                user_question,
+                error_message,
+                match_code,
+                player_index,
+            )
+            return JSONResponse(
+                {"error": error_message},
+                status_code=409,
+            )
+        if not config["GEMINI_API_KEY"]:
+            error_message = "The game advisor is not configured."
+            log_advisor_event(
+                "unavailable",
+                user_question,
+                error_message,
+                match_code,
+                player_index,
+            )
+            return JSONResponse(
+                {"error": error_message}, status_code=503
+            )
+        log_advisor_event(
+            "processing",
+            user_question,
+            "The advisor is generating a response.",
+            match_code,
+            player_index,
+        )
+        questions = [
+            {
+                "number": index + 1,
+                "question": item["text"],
+                "correct_answer": item["options"][
+                    ord(item["correct"]) - ord("A")
+                ],
+            }
+            for index, item in enumerate(
+                game_data["questions"][: game_data["round_index"] + 1]
+            )
+        ]
+        game_context = {
+            "category": game_data["category"],
+            "phase": game_data["phase"],
+            "questions": questions,
+            "players": game_data["players"],
+            "scores": game_data["scores"],
+            "latest_answers": game_data.get("feedback")
+            or game_data.get("answers", []),
+            "winner": winner_for(game_data) if game_data["phase"] == "done" else None,
+        }
+        try:
+            answer = await run_in_threadpool(
+                answer_game_question,
+                config["GEMINI_API_KEY"],
+                user_question,
+                game_context,
+            )
+        except GameAdvisorError as error:
+            logger.warning("Game advisor request failed: %s", error)
+            log_advisor_event(
+                "error",
+                user_question,
+                str(error),
+                match_code,
+                player_index,
+            )
+            return JSONResponse({"error": str(error)}, status_code=502)
+        log_advisor_event(
+            "answered",
+            user_question,
+            answer,
+            match_code,
+            player_index,
+        )
+        return JSONResponse({"answer": answer})
 
     @app.post("/continue", name="continue_game")
     async def continue_game(request: Request):
